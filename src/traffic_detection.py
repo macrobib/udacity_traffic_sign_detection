@@ -24,19 +24,29 @@ prob = tf.placeholder(tf.float32)
 
 # Define the weights.
 weights = {
-        'w1': tf.Variable(tf.truncated_normal(shape=(5, 5, 3, 6), mean=0., stddev=0.5), name='W1'),
-        'w2': tf.Variable(tf.truncated_normal(shape=(5, 5, 6, 16), mean=0., stddev=0.5), name='W2'),
-        'w3': tf.Variable(tf.truncated_normal(shape=(400, 120), mean=0., stddev=0.5), name='W3'),
-        'w4': tf.Variable(tf.truncated_normal(shape=(120, 84), mean=0., stddev=0.5), name='W4'),
-        'w5': tf.Variable(tf.truncated_normal(shape=(84, 43), mean=0., stddev=0.5), name='W5')
+        'w1': tf.Variable(tf.truncated_normal(shape=(5, 5, 3, 6), mean=0., stddev=0.1), name='W1'),
+        'w2': tf.Variable(tf.truncated_normal(shape=(5, 5, 6, 16), mean=0., stddev=0.1), name='W2'),
+        'w3': tf.Variable(tf.truncated_normal(shape=(8*8*16, 400), mean=0., stddev=0.1), name='W3'),
+        'w4': tf.Variable(tf.truncated_normal(shape=(400, 120), mean=0., stddev=0.1), name='W4'),
+        'w5': tf.Variable(tf.truncated_normal(shape=(120, 84), mean=0., stddev=0.1), name='W5'),
+        'w6': tf.Variable(tf.truncated_normal(shape=(84, 43), mean=0., stddev=0.1), name='W5')
         }
 #Define the biases.
 biases = {
-        'b1': tf.Variable(tf.truncated_normal([6], mean=0, stddev=0.5),name='B1'),
-        'b2': tf.Variable(tf.truncated_normal([16], mean=0, stddev=0.5),name='B2'),
-        'b3': tf.Variable(tf.truncated_normal([120], mean=0, stddev=0.5),name='B3'),
-        'b4': tf.Variable(tf.truncated_normal([84], mean=0, stddev=0.5),name='B4'),
-        'b5': tf.Variable(tf.truncated_normal([43], mean=0, stddev=0.5),name='B5')
+        'b1': tf.Variable(tf.truncated_normal([6], mean=0., stddev=0.1),name='B1'),
+        'b2': tf.Variable(tf.truncated_normal([16], mean=0., stddev=0.1),name='B2'),
+        'b3': tf.Variable(tf.truncated_normal([400], mean=0., stddev=0.1),name='B3'),
+        'b4': tf.Variable(tf.truncated_normal([120], mean=0., stddev=0.1),name='B4'),
+        'b5': tf.Variable(tf.truncated_normal([43], mean=0., stddev=0.1),name='B5')
+        }
+
+biases_s = {
+        'b1': tf.Variable(tf.constant(0.1, shape=[6])),
+        'b2': tf.Variable(tf.constant(0.1, shape=[16])),
+        'b3': tf.Variable(tf.constant(0.1, shape=[400])),
+        'b4': tf.Variable(tf.constant(0.1, shape=[120])),
+        'b5': tf.Variable(tf.constant(0.1, shape=[84])),
+        'b6': tf.Variable(tf.constant(0.1, shape=[43]))
         }
 
 #Load the datasets.
@@ -63,7 +73,7 @@ print("Labels are: ", y_train)
 data_augment_functions = {}
 content = {}
 # Open the label data and save it to an array.
-with open('signnames.csv', 'r') as file:
+with open('../data/signnames.csv', 'r') as file:
     csvfile = csv.reader(file)
     for line, row in enumerate(csvfile):
         if line != 0:
@@ -374,7 +384,7 @@ def global_local_contrast_normalization(image):
 
 def preprocess_data():
     """"Data pre processing and augmentation."""
-    augment_data()
+    #augment_data()
     #split_data()
     one_hot_encode()
     normalize_data()
@@ -416,9 +426,9 @@ def oneCNN_network(x, prob):
     # layer 1 5x5 kernel and stride 1.
     layer_1_w = tf.Variable(tf.truncated_normal(shape=(5, 5, 3, 64), mean=mu, stddev=sigma))
     layer_1_b = tf.Variable(tf.zeros(64))
-    layer_1_conv = tf.nn.conv2d(x, layer_1_w, strides=[1, 1, 1, 1], padding='VALID') + layer_1_b
+    layer_1_conv = tf.nn.conv2d(x, layer_1_w, strides=[1, 1, 1, 1], padding='SAME') + layer_1_b
     # Maxpool kernel 2x2 stride 2
-    layer_1_conv = tf.nn.max_pool(layer_1_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+    layer_1_conv = tf.nn.max_pool(layer_1_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
     # Two branches: fully connected and convolutional.
     # branch_1_data = tf.reshape(layer_1_conv, [-1])
     branch_1_data = flatten(layer_1_conv)
@@ -429,8 +439,8 @@ def oneCNN_network(x, prob):
 
     layer_2_w = tf.Variable(tf.truncated_normal(shape=(3, 3, 64, 128), mean=mu, stddev=sigma))
     layer_2_b = tf.Variable(tf.zeros(128))
-    layer_2_conv = tf.nn.conv2d(layer_1_conv, layer_2_w, strides=[1, 1, 1, 1], padding='VALID') + layer_2_b
-    layer_2_conv = tf.nn.max_pool(layer_2_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+    layer_2_conv = tf.nn.conv2d(layer_1_conv, layer_2_w, strides=[1, 1, 1, 1], padding='SAME') + layer_2_b
+    layer_2_conv = tf.nn.max_pool(layer_2_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
     # Two further branches.
     branch_2_data = flatten(layer_2_conv)
@@ -441,8 +451,8 @@ def oneCNN_network(x, prob):
 
     layer_3_w = tf.Variable(tf.truncated_normal(shape=(3, 3, 128, 64), mean=mu, stddev=sigma))
     layer_3_b = tf.Variable(tf.zeros(64))
-    layer_3_conv = tf.nn.conv2d(layer_2_conv, layer_3_w, strides=[1, 1, 1, 1], padding='VALID') + layer_3_b
-    layer_3_conv = tf.nn.max_pool(layer_3_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+    layer_3_conv = tf.nn.conv2d(layer_2_conv, layer_3_w, strides=[1, 1, 1, 1], padding='SAME') + layer_3_b
+    layer_3_conv = tf.nn.max_pool(layer_3_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
     branch_3_data = flatten(layer_3_conv)
     weight_3_fc = tf.Variable(tf.truncated_normal(shape=(int(branch_3_data.get_shape()[1]), 96), mean=mu, stddev=sigma))
@@ -472,27 +482,37 @@ def oneCNN_network(x, prob):
 def network(x, prob):
     """"Implement the training chain."""
     # Layer 1.
-    layer_1_conv = tf.nn.conv2d(x, weights['w1'], strides=[1, 1, 1, 1],padding='VALID') + biases['b1']
+    layer_1_conv = tf.nn.conv2d(x, weights['w1'], strides=[1, 1, 1, 1],padding='SAME')
+    layer_1_conv = tf.nn.bias_add(layer_1_conv, biases_s['b1'])
     layer_1_conv = tf.nn.relu(layer_1_conv)
-    layer_1_conv = tf.nn.max_pool(layer_1_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+    layer_1_conv = tf.nn.max_pool(layer_1_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
     # Layer 2
-    layer_2_conv = tf.nn.conv2d(layer_1_conv, weights['w2'], strides=[1, 1, 1, 1], padding='VALID') + biases['b2']
+    layer_2_conv = tf.nn.conv2d(layer_1_conv, weights['w2'], strides=[1, 1, 1, 1], padding='SAME')
+    layer_2_conv = tf.nn.bias_add(layer_2_conv, biases_s['b2'])
     layer_2_conv = tf.nn.relu(layer_2_conv)
-    layer_2_conv = tf.nn.max_pool(layer_2_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+    layer_2_conv = tf.nn.max_pool(layer_2_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
     # layer 3 - First fully connected.
     fc0 = flatten(layer_2_conv)
-    layer_3_conv = tf.add(tf.matmul(fc0, weights['w3']), biases['b3'])
+    #fc0 = tf.reshape(layer_2_conv, [-1, weights['w3'].get_shape().as_list()[0]])
+    layer_3_conv = tf.add(tf.matmul(fc0, weights['w3']), biases_s['b3'])
     layer_3_conv = tf.nn.relu(layer_3_conv)
     layer_3_conv = tf.nn.dropout(layer_3_conv, prob)
 
     # layer_4 - Second fully connected.
-    layer_4_conv = tf.add(tf.matmul(layer_3_conv, weights['w4']), biases['b4'])
+    #fc1 = tf.reshape(layer_3_conv, [-1, weights['w4'].get_shape().as_list()[0]])
+    layer_4_conv = tf.add(tf.matmul(layer_3_conv, weights['w4']), biases_s['b4'])
+    layer_4_conv = tf.nn.relu(layer_4_conv)
     layer_4_conv = tf.nn.dropout(layer_4_conv, prob)
-
+    
+    #logits = layer_4_conv
     #layer_5 - Third fully connected.
-    logits = tf.add(tf.matmul(layer_4_conv, weights['w5']), biases['b5'])
+    layer_5_conv = tf.add(tf.matmul(layer_4_conv, weights['w5']), biases_s['b5'])
+    layer_5_output_conv = tf.nn.relu(layer_5_conv)
+    layer_5_conv = tf.nn.dropout(layer_5_conv, prob)
+    #fc2 = tf.reshape(layer_4_conv, [-1, weights['w5'].get_shape().as_list()[0]])
+    logits = tf.add(tf.matmul(layer_5_conv, weights['w6']), biases_s['b6'])
     return logits
 
 def validate(batch_size, accuracy, x, y, prob):
@@ -537,7 +557,7 @@ def train(epochs, batch_size, learning_rate):
         for epoch in range(epochs):
             for batchset in next_batch(batch_size):
                 batch_count += 1
-                sess.run(optimizer, feed_dict={x:batchset[0], y:batchset[1], prob:0.5})
+                sess.run(optimizer, feed_dict={x:batchset[0], y:batchset[1], prob:0.8})
                 #if batch_count%10 == 0:
             acc = validate(batch_size, accuracy, x, y, prob)
             print('Epoch: {:>2} - Batch:{:>5} - Accuracy: {:>5.4f}'.format(epoch, batch_count, acc))
@@ -550,5 +570,5 @@ def test():
 #normalize_data()
 # visualize_data()
 preprocess_data()
-train(200, 128, 0.0003) # Train for 50 epochs with batch size of 128 and training rate of 0.0001
+train(20, 128, 0.003) # Train for 50 epochs with batch size of 128 and training rate of 0.0001
 # test()
