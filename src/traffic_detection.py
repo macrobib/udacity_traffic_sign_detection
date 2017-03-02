@@ -18,6 +18,9 @@ validation_file = '../data/valid.p'
 epochs = 20
 
 # Define the variables
+global_step = tf.Variable(0, trainable=False)
+starter_learning_rate = 0.1
+learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step, 10000, 0.96, staircase=True)
 x = tf.placeholder(tf.float32, [None, 32, 32, 3])
 y = tf.placeholder(tf.float32, [None, 43])
 prob = tf.placeholder(tf.float32)
@@ -545,7 +548,7 @@ def train(epochs, batch_size, learning_rate):
         logit = sermanet_network(x, prob)
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logit, y))
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost, global_step=global_step)
 
     # Define accuracy function.
     accuracy_operation = tf.equal(tf.argmax(logit, 1), tf.argmax(y, 1))
