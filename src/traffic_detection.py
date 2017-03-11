@@ -18,9 +18,9 @@ validation_file = '../data/valid.p'
 epochs = 20
 
 # Define the variables
-global_step = tf.Variable(0, trainable=False)
-starter_learning_rate = 0.1
-learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step, 10000, 0.96, staircase=True)
+#global_step = tf.Variable(0, trainable=False)
+#starter_learning_rate = 0.1
+#learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step, 10000, 0.96, staircase=True)
 x = tf.placeholder(tf.float32, [None, 32, 32, 3])
 y = tf.placeholder(tf.float32, [None, 43])
 prob = tf.placeholder(tf.float32)
@@ -387,7 +387,7 @@ def global_local_contrast_normalization(image):
 
 def preprocess_data():
     """"Data pre processing and augmentation."""
-    #augment_data()
+    augment_data()
     #split_data()
     one_hot_encode()
     normalize_data()
@@ -508,7 +508,7 @@ def network(x, prob):
     layer_4_conv = tf.add(tf.matmul(layer_3_conv, weights['w4']), biases_s['b4'])
     layer_4_conv = tf.nn.relu(layer_4_conv)
     layer_4_conv = tf.nn.dropout(layer_4_conv, prob)
-    
+
     #logits = layer_4_conv
     #layer_5 - Third fully connected.
     layer_5_conv = tf.add(tf.matmul(layer_4_conv, weights['w5']), biases_s['b5'])
@@ -529,7 +529,7 @@ def validate(batch_size, accuracy, x, y, prob):
     sess = tf.get_default_session()
     for offset in range(0, validation_size, batch_size):
         batch_x, batch_y = X_Validate[offset: offset + batch_size], y_validate[offset: offset + batch_size]
-        acc = sess.run(accuracy, feed_dict={x: batch_x, y: batch_y, prob:0.8})
+        acc = sess.run(accuracy, feed_dict={x: batch_x, y: batch_y, prob:0.5})
         total_accuracy += (acc * batch_size)
     return total_accuracy/validation_size
 
@@ -548,7 +548,7 @@ def train(epochs, batch_size, learning_rate):
         logit = sermanet_network(x, prob)
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logit, y))
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost, global_step=global_step)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
     # Define accuracy function.
     accuracy_operation = tf.equal(tf.argmax(logit, 1), tf.argmax(y, 1))
@@ -560,7 +560,7 @@ def train(epochs, batch_size, learning_rate):
         for epoch in range(epochs):
             for batchset in next_batch(batch_size):
                 batch_count += 1
-                sess.run(optimizer, feed_dict={x:batchset[0], y:batchset[1], prob:0.8})
+                sess.run(optimizer, feed_dict={x:batchset[0], y:batchset[1], prob:0.5})
                 #if batch_count%10 == 0:
             acc = validate(batch_size, accuracy, x, y, prob)
             print('Epoch: {:>2} - Batch:{:>5} - Accuracy: {:>5.4f}'.format(epoch, batch_count, acc))
@@ -573,5 +573,5 @@ def test():
 #normalize_data()
 # visualize_data()
 preprocess_data()
-train(20, 128, 0.003) # Train for 50 epochs with batch size of 128 and training rate of 0.0001
+train(200, 128, 0.001) # Train for 50 epochs with batch size of 128 and training rate of 0.0001
 # test()
