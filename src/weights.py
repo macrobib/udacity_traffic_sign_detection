@@ -41,13 +41,12 @@ class weights:
         wegiths['w5'] = tf.Variable(tf.truncated_normal(shape=(120, 84), mean=0., stddev=0.1), name='W5')
         weights['w6'] = tf.Variable(tf.truncated_normal(shape=(84, 43), mean=0., stddev=0.1), name='W6')
 
-        biases['b1'] = tf.Variable(tf.truncated_normal([6], mean=0., stddev=0.1),name='B1')
-        biases['b2'] = tf.Variable(tf.truncated_normal([16], mean=0., stddev=0.1),name='B2')
-        biases['b3'] = tf.Variable(tf.truncated_normal([400], mean=0., stddev=0.1),name='B3')
-        biases['b4'] = tf.Variable(tf.truncated_normal([120], mean=0., stddev=0.1),name='B4')
-        biases['b5'] = tf.Variable(tf.truncated_normal([84], mean=0., stddev=0.1),name='B5')
-        biases['b6'] = tf.Variable(tf.truncated_normal([43], mean=0., stddev=0.1),name='B6')
-
+        biases['b1'] = tf.constant(0.1, shape=[6], name='B1')
+        biases['b2'] = tf.constant(0.1, shape=[6], name='B3')
+        biases['b3'] = tf.constant(0.1, shape=[6], name='B3')
+        biases['b4'] = tf.constant(0.1, shape=[6], name='B4')
+        biases['b5'] = tf.constant(0.1, shape=[6], name='B5')
+        biases['b6'] = tf.constant(0.1, shape=[6], name='B6')
         return weights, biases
 
 
