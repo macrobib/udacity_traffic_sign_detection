@@ -8,32 +8,41 @@ import pickle
 import random
 from math import ceil
 from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
 from tqdm import *
 import sys
-print(sys.path)
-
 training_file = '../data/train.p'
 testing_file = '../data/test.p'
 validation_file = '../data/valid.p'
-epochs = 20
 
 # Define the variables
-#global_step = tf.Variable(0, trainable=False)
-#starter_learning_rate = 0.1
-#learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step, 10000, 0.96, staircase=True)
-x = tf.placeholder(tf.float32, [None, 32, 32, 3])
-y = tf.placeholder(tf.float32, [None, 43])
+x_input = tf.placeholder(tf.float32, [None, 32, 32, 3])
+y_labels = tf.placeholder(tf.float32, [None, 43])
 prob = tf.placeholder(tf.float32)
+is_training = True
 
-# Define the weights.
-weights = {
+# Define the weights - xavier normal.
+weights_xav = {
+        'w1': tf.get_variable(shape=(5, 5, 3, 6), initializer=tf.contrib.layers.xavier_initializer(), name='W1'),
+        'w2': tf.get_variable(shape=(5, 5, 6, 16),initializer=tf.contrib.layers.xavier_initializer(), name='W2'),
+        'w3': tf.get_variable(shape=(8*8*16, 400), initializer=tf.contrib.layers.xavier_initializer(), name='W3'),
+        'w4': tf.get_variable(shape=(400, 120), initializer=tf.contrib.layers.xavier_initializer(), name='W4'),
+        'w5': tf.get_variable(shape=(120, 84), initializer=tf.contrib.layers.xavier_initializer(), name='W5'),
+        'w6': tf.get_variable(shape=(84, 43),  initializer=tf.contrib.layers.xavier_initializer(), name='W6')
+        }
+
+# Define the weights - truncated initialization.
+weights_trunc = {
         'w1': tf.Variable(tf.truncated_normal(shape=(5, 5, 3, 6), mean=0., stddev=0.1), name='W1'),
         'w2': tf.Variable(tf.truncated_normal(shape=(5, 5, 6, 16), mean=0., stddev=0.1), name='W2'),
         'w3': tf.Variable(tf.truncated_normal(shape=(8*8*16, 400), mean=0., stddev=0.1), name='W3'),
         'w4': tf.Variable(tf.truncated_normal(shape=(400, 120), mean=0., stddev=0.1), name='W4'),
         'w5': tf.Variable(tf.truncated_normal(shape=(120, 84), mean=0., stddev=0.1), name='W5'),
-        'w6': tf.Variable(tf.truncated_normal(shape=(84, 43), mean=0., stddev=0.1), name='W5')
+        'w6': tf.Variable(tf.truncated_normal(shape=(84, 43), mean=0., stddev=0.1), name='W6')
         }
+# Selected weights
+weights = weights_xav
+
 #Define the biases.
 biases = {
         'b1': tf.Variable(tf.truncated_normal([6], mean=0., stddev=0.1),name='B1'),
@@ -71,6 +80,7 @@ X_test.astype(np.float32)
 
 print("Total length", len(y_train))
 print("Labels are: ", y_train)
+print("Test sample shape is: ", X_test.shape)
 # Create a list of randomization function, which will be again called for a random
 # count and random order.
 data_augment_functions = {}
@@ -136,11 +146,12 @@ def shuffle_data():
     X_Validate = X_Validate[shuffle_index, :, :, :]
     y_validate = y_validate[shuffle_index, :]
 
-    row_test, _, _, _ = X_train.shape
+    row_test, _, _, _ = X_test.shape
     shuffle_index = np.arange(row_test)
-    shuffle_index = np.random.shuffle(shuffle_index)
+    np.random.shuffle(shuffle_index)
     X_test = X_test[shuffle_index, :, :, :]
     y_test = y_test[shuffle_index, :]
+    print("Shuffled test data shape: ", X_test.shape)
     print("Shuffle: ", row_train, row_test)
 
 def one_hot_encode():
@@ -177,7 +188,7 @@ def translation(image, trans_range=3):
     dst = cv2.warpAffine(image, M, (col, row))
     return dst
 
-def shear(image, shear_val=5):
+def shear(image, shear_val=10):
     row, col, _ = image.shape
     point1 = np.float32([[5, 5], [20, 5], [5, 20]])
     p1 = 5 + shear_val*np.random.uniform() - shear_val/2
@@ -238,7 +249,7 @@ def augment_image(image):
     #dst = image
     #print("Augment image shape: ", dst.shape)
     define_aug_functions()
-    val = [i for i in range(5)]
+    val = [i for i in range(3)]
     random.shuffle(val)
     for i in val:
         dst = data_augment_functions[i](image)
@@ -256,9 +267,6 @@ def augment_data():
     list_X_train = X_train.tolist()
     list_y_train = y_train.tolist()
     labelwise_data = {i:5000 - content[i][1] for i in content.keys()}
-    #print("content", content)
-    #print("label wise data", labelwise_data)
-    #sys.exit(0)
     data_len = len(X_train)
     augment_count = sum(labelwise_data.values())
     # Seperate the data to individual labels.
@@ -271,12 +279,8 @@ def augment_data():
                 augment_count -= 1
                 labelwise_data[index] -= 1
                 image = augment_image(X_train[i])
-                #print("augmented shaped..", image.shape)
-                #sys.exit(0)
                 list_X_train.append(list(image))
                 list_y_train.append(index)
-                #X_train = np.append(X_train, [image], axis=0)
-                #y_train = np.append(y_train, [index], axis=0)
         # repopulate content data structure.
     print("Creating a new set of numpy array.")
     X_train = np.array(list_X_train)
@@ -387,11 +391,17 @@ def global_local_contrast_normalization(image):
 
 def preprocess_data():
     """"Data pre processing and augmentation."""
+    global X_train
+    global y_train
+    global X_Validate
+    global y_validate
     augment_data()
-    #split_data()
     one_hot_encode()
-    normalize_data()
     shuffle_data()
+    #split_data()
+    X_train, X_Validate, y_train, y_validate = train_test_split(X_train, y_train, test_size=0.2,
+                                                                                    random_state=0)
+    # normalize_data()
 
 def next_batch(batch_size):
     """"Generator to provide next batch of data."""
@@ -405,19 +415,6 @@ def next_batch(batch_size):
         batch_start = batch_end
         batch_end = batch_end + batch_size
         yield (X_train[batch_start:batch_end], y_train[batch_start:batch_end])
-
-def sermanet_network(x, prob):
-    """Sermanet et.al for traffic sign classification."""
-    mu = 0
-    sigma = 0.1
-
-    # layer 1
-    layer_1_w = tf.Variable(tf.truncated_normal(shape=(5, 5, )))
-
-def ciresan_network(x, prob):
-    """Ciresan Network for traffic recognition."""
-    mu = 0
-    sigma = 0.1
 
 
 def oneCNN_network(x, prob):
@@ -481,7 +478,6 @@ def oneCNN_network(x, prob):
     return layer_5_output
 
 
-
 def network(x, prob):
     """"Implement the training chain."""
     # Layer 1.
@@ -489,40 +485,42 @@ def network(x, prob):
     layer_1_conv = tf.nn.bias_add(layer_1_conv, biases_s['b1'])
     layer_1_conv = tf.nn.relu(layer_1_conv)
     layer_1_conv = tf.nn.max_pool(layer_1_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+    layer_1_conv = tf.contrib.layers.batch_norm(layer_1_conv, is_training=is_training, trainable=True)
 
     # Layer 2
     layer_2_conv = tf.nn.conv2d(layer_1_conv, weights['w2'], strides=[1, 1, 1, 1], padding='SAME')
     layer_2_conv = tf.nn.bias_add(layer_2_conv, biases_s['b2'])
     layer_2_conv = tf.nn.relu(layer_2_conv)
     layer_2_conv = tf.nn.max_pool(layer_2_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+    layer_2_conv = tf.contrib.layers.batch_norm(layer_2_conv, is_training=is_training, trainable=True)
 
     # layer 3 - First fully connected.
     fc0 = flatten(layer_2_conv)
-    #fc0 = tf.reshape(layer_2_conv, [-1, weights['w3'].get_shape().as_list()[0]])
+    fc0 = tf.nn.dropout(fc0, 0.2)
     layer_3_conv = tf.add(tf.matmul(fc0, weights['w3']), biases_s['b3'])
     layer_3_conv = tf.nn.relu(layer_3_conv)
     layer_3_conv = tf.nn.dropout(layer_3_conv, prob)
 
     # layer_4 - Second fully connected.
-    #fc1 = tf.reshape(layer_3_conv, [-1, weights['w4'].get_shape().as_list()[0]])
     layer_4_conv = tf.add(tf.matmul(layer_3_conv, weights['w4']), biases_s['b4'])
     layer_4_conv = tf.nn.relu(layer_4_conv)
     layer_4_conv = tf.nn.dropout(layer_4_conv, prob)
 
-    #logits = layer_4_conv
     #layer_5 - Third fully connected.
     layer_5_conv = tf.add(tf.matmul(layer_4_conv, weights['w5']), biases_s['b5'])
-    layer_5_output_conv = tf.nn.relu(layer_5_conv)
+    layer_5_conv = tf.nn.relu(layer_5_conv)
     layer_5_conv = tf.nn.dropout(layer_5_conv, prob)
-    #fc2 = tf.reshape(layer_4_conv, [-1, weights['w5'].get_shape().as_list()[0]])
     logits = tf.add(tf.matmul(layer_5_conv, weights['w6']), biases_s['b6'])
     return logits
+
 
 def validate(batch_size, accuracy, x, y, prob):
     """"Evaluate the network on validation data."""
     global X_Validate
     global y_validate
+    global is_training
     total_accuracy = 0
+    is_training = False
     validation_size = len(y_validate)
     assert len(X_Validate) == validation_size
 
@@ -531,47 +529,76 @@ def validate(batch_size, accuracy, x, y, prob):
         batch_x, batch_y = X_Validate[offset: offset + batch_size], y_validate[offset: offset + batch_size]
         acc = sess.run(accuracy, feed_dict={x: batch_x, y: batch_y, prob:0.5})
         total_accuracy += (acc * batch_size)
+    is_training = True # Enable it back for training.
     return total_accuracy/validation_size
 
+
+def test(batch_size, accuracy, x, y, prob):
+    """"Check the network on test data."""
+    global X_test
+    global y_test
+    global is_training
+    total_accuracy = 0
+    is_training = False
+    test_size = len(y_test)
+    assert len(X_test) == test_size
+    sess = tf.get_default_session()
+    for offset in range(0, test_size, batch_size):
+        batch_x, batch_y = X_test[offset: offset + batch_size], y_test[offset: offset + batch_size]
+        acc = sess.run(accuracy, feed_dict={x: batch_x, y: batch_y, prob: 0.5})
+        total_accuracy += (acc * batch_size)
+    return total_accuracy / test_size
 
 
 def train(epochs, batch_size, learning_rate):
     """Train the network."""
+    global x_input
+    global y_labels
+    global is_training
+    train_acc = {"acc":[], "iter":[]}
+    valid_acc = {"acc":[], "iter":[]}
     select_network = 0
-
+    is_training = True
     # Pick the network to use for training.
     if select_network == 0 :
-        logit = network(x, prob)
-    elif select_network == 1:
-        logit = oneCNN_network(x, prob)
+        model = network(x_input, prob)
     else:
-        logit = sermanet_network(x, prob)
+        model = oneCNN_network(x_input, prob)
 
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logit, y))
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=model, labels=y_labels))
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
     # Define accuracy function.
-    accuracy_operation = tf.equal(tf.argmax(logit, 1), tf.argmax(y, 1))
+    accuracy_operation = tf.equal(tf.argmax(model, 1), tf.argmax(y_labels, 1))
     accuracy = tf.reduce_mean(tf.cast(accuracy_operation, tf.float32))
     batch_count = 0
-
+    saver = tf.train.Saver()
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(epochs):
             for batchset in next_batch(batch_size):
                 batch_count += 1
-                sess.run(optimizer, feed_dict={x:batchset[0], y:batchset[1], prob:0.5})
-                #if batch_count%10 == 0:
-            acc = validate(batch_size, accuracy, x, y, prob)
+                sess.run(optimizer, feed_dict={x_input:batchset[0], y_labels:batchset[1], prob:0.5})
+                if batch_count%batch_size == 0:
+                    acc = sess.run(accuracy, feed_dict={x_input:batchset[0], y_labels:batchset[1], prob:0.5})
+                    train_acc["acc"].append(acc)
+                    train_acc["iter"].append(batch_count)
+            acc = validate(batch_size, accuracy, x_input, y_labels, prob)
+            valid_acc["acc"].append(acc)
+            valid_acc["iter"].append(batch_count)
             print('Epoch: {:>2} - Batch:{:>5} - Accuracy: {:>5.4f}'.format(epoch, batch_count, acc))
+        acc = test(batch_size, accuracy, x_input, y_labels, prob)
 
+        print('Test Accuracy -: {:>5.4f}'.format(acc))
+        save_path = saver.save(sess, "./model.ckpt")
+        print("Model saved to : ", save_path)
+        plot_acc(train_acc, valid_acc)
 
-def test():
-    """"Check the network on test data."""
-    pass
-
+def plot_acc(train, valid):
+    plt.plot(train["iter"], train["acc"], 'b')
+    plt.plot(valid["iter"], valid["acc"], 'r')
+    plt.show()
 #normalize_data()
 # visualize_data()
 preprocess_data()
-train(200, 128, 0.001) # Train for 50 epochs with batch size of 128 and training rate of 0.0001
-# test()
+train(30, 128, 0.001) # Train for 50 epochs with batch size of 128 and training rate of 0.0001
