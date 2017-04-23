@@ -16,6 +16,7 @@ testing_file = '../data/test.p'
 validation_file = '../data/valid.p'
 
 # Define the variables
+model = None
 x_input = tf.placeholder(tf.float32, [None, 32, 32, 3])
 y_labels = tf.placeholder(tf.float32, [None, 43])
 prob = tf.placeholder(tf.float32)
@@ -188,7 +189,7 @@ def translation(image, trans_range=3):
     dst = cv2.warpAffine(image, M, (col, row))
     return dst
 
-def shear(image, shear_val=10):
+def shear(image, shear_val=5):
     row, col, _ = image.shape
     point1 = np.float32([[5, 5], [20, 5], [5, 20]])
     p1 = 5 + shear_val*np.random.uniform() - shear_val/2
@@ -222,10 +223,6 @@ def flip(image):
     return dst
 
 
-def prespective_transform(image):
-    """Do a perspective transform on the image."""
-    pass
-
 def define_aug_functions():
     """Define a set of augmentation lambda functions"""
     global data_augment_functions
@@ -243,18 +240,12 @@ def define_aug_functions():
 
 def augment_image(image):
     """Augment the data"""
-    #dst = np.array(image)
-    #print("Image shape is : ", image.shape)
-    #display_image(image)
-    #dst = image
-    #print("Augment image shape: ", dst.shape)
+    dst = image
     define_aug_functions()
     val = [i for i in range(3)]
     random.shuffle(val)
     for i in val:
         dst = data_augment_functions[i](image)
-    #dst = np.tolist(dst)
-    #display_image(dst)
     return dst
 
 
@@ -271,7 +262,6 @@ def augment_data():
     augment_count = sum(labelwise_data.values())
     # Seperate the data to individual labels.
     print("Start augmenting the data..")
-    #for i in tqdm(range(data_len)):
     while augment_count > 0:
         for i in tqdm(range(data_len)):
             index = y_train[i]
@@ -292,11 +282,7 @@ def augment_data():
     for i in y_train:
         backup_content[i][1] += 1
     print(backup_content)
-    #sys.exit(0)
     print("Finished: Augmenting data..")
-    #for i in range(10):
-        #random_image()
-    #sys.exit(0)
 
 
 
@@ -328,8 +314,8 @@ def visualize_data():
     """"Visualize the given data."""
     figure, ax = plt.subplots(figsize=(20, 40))
     ylen = np.arange(len(content))
-
-    ax.barh(ylen, content.values()[1], align='center', color='green')
+    list_names = [list(content.values())[i][1] for i in range(len(content))]
+    ax.barh(ylen, list_names, align='center', color='green')
     ax.set_yticklabels(content.keys())
     ax.set_yticks(ylen)
     ax.set_xlabel('No of Images')
@@ -496,7 +482,7 @@ def network(x, prob):
 
     # layer 3 - First fully connected.
     fc0 = flatten(layer_2_conv)
-    fc0 = tf.nn.dropout(fc0, 0.2)
+    fc0 = tf.nn.dropout(fc0, 0.8)
     layer_3_conv = tf.add(tf.matmul(fc0, weights['w3']), biases_s['b3'])
     layer_3_conv = tf.nn.relu(layer_3_conv)
     layer_3_conv = tf.nn.dropout(layer_3_conv, prob)
@@ -509,7 +495,7 @@ def network(x, prob):
     #layer_5 - Third fully connected.
     layer_5_conv = tf.add(tf.matmul(layer_4_conv, weights['w5']), biases_s['b5'])
     layer_5_conv = tf.nn.relu(layer_5_conv)
-    layer_5_conv = tf.nn.dropout(layer_5_conv, prob)
+    # layer_5_conv = tf.nn.dropout(layer_5_conv, prob)
     logits = tf.add(tf.matmul(layer_5_conv, weights['w6']), biases_s['b6'])
     return logits
 
@@ -555,6 +541,7 @@ def train(epochs, batch_size, learning_rate):
     global x_input
     global y_labels
     global is_training
+    global model
     train_acc = {"acc":[], "iter":[]}
     valid_acc = {"acc":[], "iter":[]}
     select_network = 0
@@ -598,7 +585,52 @@ def plot_acc(train, valid):
     plt.plot(train["iter"], train["acc"], 'b')
     plt.plot(valid["iter"], valid["acc"], 'r')
     plt.show()
+
+def detect_image(files):
+    """To test the model on unknown additional data."""
+    global model
+    global x_input
+    image_ids = list()
+    model = network(x_input, 0.5)
+    #Resize the image.
+    arg_max = tf.argmax(model, 1)
+    saver = tf.train.Saver()
+    with tf.Session() as sess:
+        saver.restore(sess, "./model.ckpt")
+        for image in files:
+            img = cv2.imread(image)
+            img = cv2.resize(img, (32, 32))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            print(img.shape)
+            img = np.array([img])
+            image_id = sess.run(arg_max, feed_dict={x_input: img})
+            image_ids.append(image_id[0])
+    return image_ids
+
+
+def process_collected_image(files):
+    image_ids = detect_image(files)
+    # Plot the image and id.
+    for index, image in enumerate(files):
+        img = plt.imread(image)
+        plt.imshow(img)
+        plt.xlabel(content[image_ids[index]][0])
+        plt.show()
+
 #normalize_data()
-# visualize_data()
-preprocess_data()
-train(30, 128, 0.001) # Train for 50 epochs with batch size of 128 and training rate of 0.0001
+visualize_data()
+# preprocess_data()
+# train(25, 128, 0.0003) # Train for 50 epochs with batch size of 128 and training rate of 0.0001
+# Test on additional data.
+def additional_data_test():
+    additional_images = list()
+    additional_images.append('../additional_data/branching_road.jpg')
+    additional_images.append('../additional_data/pedestrian.jpg')
+    additional_images.append('../additional_data/reverse_curve.JPG')
+    additional_images.append('../additional_data/No_u_turn.JPG')
+    additional_images.append('../additional_data/stop_ahead.JPG')
+    additional_images.append('../additional_data/turn.jpg')
+    additional_images.append('../additional_data/twisty_road.jpg')
+    process_collected_image(additional_images)
+
+additional_data_test()
